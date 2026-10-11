@@ -1,0 +1,5 @@
+{
+  "summary":  "Complete security audit and minimal PR-B patch plan for the Brain repository's cross-repository build workflow (.github/workflows/brain-build.yml), detailing critical container isolation vulnerabilities, gitleaks crashes on file deletion, string corruption bugs, silent failure behavior, and an 8-point acceptance criteria checklist.",
+  "updatedAt":  "2026-10-11T21:56:51.511511661Z",
+  "userFacing":  true
+}

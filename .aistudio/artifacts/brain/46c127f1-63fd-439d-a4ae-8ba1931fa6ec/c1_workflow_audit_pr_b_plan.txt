@@ -1,0 +1,112 @@
+C1 BUILD-WORKFLOW SECURITY AUDIT & MINIMAL PR-B PLAN
+
+Repository: madnessgate44-debug/brain
+Base Commit: 1ed933157fa94ad011f325fc2c75b34079204b13 (tip of main)
+PR #223 State: Merged (ace1668962ff4a9a0e71df8932fc4469e7f8e874)
+PR #235 State: Open / Unmerged (BRAIN_BUILD_ENABLED kill switch remains unset)
+PR #236 State: Open / Unmerged (FreeLLMPool probe only; unproven for missions)
+
+================================================================================
+SECTION A: VERIFIED REPOSITORY & PR STATUS
+================================================================================
+
+1. Repository: madnessgate44-debug/brain (Public, default branch: main).
+2. Current main tip SHA: 1ed933157fa94ad011f325fc2c75b34079204b13
+   Message: Merge pull request #230 from madnessgate44-debug/diagnostics/gemini-provider-response
+   Date: 2026-10-11T20:27:18Z
+3. PR #223 (Merged at 2026-10-11T20:08:30Z, commit ace16689):
+   Introduced .github/workflows/brain-build.yml (614 lines) and
+   tests/test_brain_build_workflow_contract.py. Contains the audited C1 defects.
+4. PR #235 (Open, head SHA 144822a03193974084dfede9acf6b8c85b5e9a54):
+   Adds vars.BRAIN_BUILD_ENABLED == 'true' && guard and tests/test_brain_build_kill_switch.py.
+   Repository variable BRAIN_BUILD_ENABLED is unset; PR is unmerged.
+5. PR #236 (Open, head SHA 89e63b210fb36eda813c78288f5ad9d673d8e4e5):
+   Adds .github/workflows/freellm-probe.yml and scripts/freellm_probe.py.
+   Probe evidence showed ~24k chars returned 200, but ~100k chars returned 402,
+   and 1 route returned 502. Keyless routes are unproven and remain unwired.
+
+================================================================================
+SECTION B: NUMBERED FINDINGS (RANKED BY SEVERITY)
+================================================================================
+
+Finding 1 [CRITICAL]: Host Runner Escape via Writable .git Volume Mount
+- Location: .github/workflows/brain-build.yml, Lines 341-347 & 563-574
+- Code:
+    "run_args": ["--rm", "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp", "-v", f"{os.environ['GITHUB_WORKSPACE']}:/workspace"]
+    followed by host-side:
+    git commit -m "Brain ${COMMAND}: automated candidate"
+- Root Cause: GITHUB_WORKSPACE is mounted read-write. An untrusted agent or prompt injection can write to /workspace/.git/hooks/pre-commit or configure core.hooksPath. When step 530 runs `git commit` on the host runner outside Docker, the hook executes on the host VM with access to runner tokens (GH_TOKEN, GH_CONTROL_TOKEN).
+- Fix:
+    1. Move .git out before launching agent: mv "$GITHUB_WORKSPACE/.git" /tmp/brain-target-git
+    2. After agent completion, assert no .git was created by agent and restore:
+       [ ! -e "$GITHUB_WORKSPACE/.git" ] || exit 1
+       mv /tmp/brain-target-git "$GITHUB_WORKSPACE/.git"
+    3. Host git commits run with: git -c core.hooksPath=/dev/null commit --no-verify ...
+    4. Read-only audits mount /workspace as :ro.
+
+Finding 2 [MAJOR]: Gitleaks Step Crashes on File Deletions / Renames
+- Location: .github/workflows/brain-build.yml, Lines 398-403
+- Code:
+    git diff --name-only -z | tar --null -T - -cf /tmp/brain-changed-files.tar
+    tar -xf /tmp/brain-changed-files.tar -C /tmp/brain-gitleaks-source
+- Root Cause: `git diff --name-only -z` includes deleted files. `tar -T -` cannot stat deleted files and exits with code 2. Under `set -e`, this crashes the entire workflow.
+- Fix: Filter out deleted files using `--diff-filter=d`:
+    git diff --name-only --diff-filter=d -z | tar --null -T - -cf /tmp/brain-changed-files.tar
+
+Finding 3 [MAJOR]: Silent Workflow Termination (Zero Failure Issue Comments)
+- Location: .github/workflows/brain-build.yml, Lines 532, 551, 578
+- Root Cause: Issue comments are only posted inside the publish step, which only runs if all prior steps succeed. Failures in lease acquisition, credentials, agent, gitleaks, or tests exit silently with no issue update.
+- Fix: Add an always()-executed failure step (if: always() && failure() && needs.prepare.outputs.issue_number != '') posting a diagnostic comment with run URL to the issue.
+
+Finding 4 [MAJOR]: tr Expression Mangles File Names and Warnings
+- Location: .github/workflows/brain-build.yml, Lines 566-567
+- Code:
+    files_changed="$(git diff --cached --name-only | head -8 | tr '\\n' ',')"
+    warnings="$(grep '^WARN:' /tmp/brain-checks.log | head -2 | tr '\\n' ';' || true)"
+- Root Cause: In bash single quotes, `'\\n'` is literal `\` and `n`. `tr` translates every backslash and every letter `n` into commas/semicolons (e.g. `main.py` -> `mai,.py`). Real newlines are untouched, corrupting PR metadata.
+- Fix: Use POSIX `paste`:
+    files_changed="$(git diff --cached --name-only | head -8 | paste -sd, -)"
+    warnings="$(grep '^WARN:' /tmp/brain-checks.log | head -2 | paste -sd';' - || true)"
+
+Finding 5 [MINOR]: git diff --check Aborts Agent Step on Whitespace
+- Location: .github/workflows/brain-build.yml, Lines 375, 380
+- Root Cause: `git diff --check` exits with status 2 on trailing whitespace. Under `set -e`, this immediately crashes the step before patch creation.
+- Fix: Make whitespace non-fatal:
+    git diff --check || echo "::warning::Whitespace errors detected in agent changes."
+
+Finding 6 [MINOR]: Trigger Expression Matches Unintended Suffixes
+- Location: .github/workflows/brain-build.yml, Lines 45-47, 55-60
+- Root Cause: `startsWith` matches `/brain builder`, `/brain retry-now`, spinning up runner VMs unnecessarily.
+- Fix: Constrain YAML expressions to exact/whitespace/newline boundaries and update contract tests in sync.
+
+Finding 7 [MINOR]: Misleading Test Reporting When No Tests Exist
+- Location: .github/workflows/brain-build.yml, Lines 421-422, 444-449, 574, 578
+- Root Cause: If no tests exist, the workflow falls back to compileall/warning with exit 0, but reports `project checks and gitleaks passed`.
+- Fix: Export `check_type` from checks step and report fallback status (e.g. `compileall smoke check (no tests found)`).
+
+================================================================================
+SECTION C: MINIMAL PR-B PLAN
+================================================================================
+
+Files to modify:
+1. .github/workflows/brain-build.yml
+2. tests/test_brain_build_workflow_contract.py
+
+Scope Guardrails:
+- No keyless provider wiring.
+- Do not edit src/brain/llm_provider.py.
+- Do not merge PR #235 or PR #236.
+- Leave BRAIN_BUILD_ENABLED unset until PR-B is merged and validated.
+
+================================================================================
+SECTION D: ACCEPTANCE CRITERIA CHECKLIST
+================================================================================
+
+[ ] AC-1: Host runner never executes .git/hooks/*; commits use core.hooksPath=/dev/null
+[ ] AC-2: .git is unmounted/isolated from the agent container during execution
+[ ] AC-3: Secret scan handles deleted, renamed, spaced, and unusual filenames cleanly
+[ ] AC-4: files_changed and warnings format cleanly with paste without mangling
+[ ] AC-5: Whitespace errors emit warnings rather than terminating the run under set -e
+[ ] AC-6: Workflow failures post a diagnostic comment with run URL to the issue
+[ ] AC-7: Repositories with no test suite report smoke checks honestly
+[ ] AC-8: All tests in tests/test_brain_build_workflow_contract.py pass 100%
