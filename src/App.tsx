@@ -10,7 +10,7 @@ import { WorkflowStudio } from './components/WorkflowStudio';
 import { ChatLogHub } from './components/ChatLogHub';
 import { INITIAL_AGENTS } from './data/mockMissions';
 import { MissionCommand } from './types/brain';
-import { Terminal, Shield, Copy, Layers, Globe, Zap, KeyRound } from 'lucide-react';
+import { Terminal, Shield, Copy, Layers, Globe, Zap, KeyRound, MessageSquare } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('chatgpt');
@@ -104,7 +104,7 @@ export default function App() {
           { id: 'zerocost', label: '$0 LLM', icon: Zap },
           { id: 'admin', label: 'Admin', icon: KeyRound },
           { id: 'simulator', label: 'Pipeline', icon: Shield },
-          { id: 'chatlog', label: 'Log', icon: Copy }
+          { id: 'chatlog', label: 'Workspace', icon: MessageSquare }
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Copy, Check, ArrowRight, ShieldCheck, AlertCircle, Sparkles, Send, FileCode } from 'lucide-react';
 import { MissionCommand } from '../types/brain';
+import { workspaceApi } from '../services/api';
 
 interface ChatGPTBridgeProps {
   targetRepo: string;
@@ -17,6 +18,8 @@ export const ChatGPTBridge: React.FC<ChatGPTBridgeProps> = ({ targetRepo, onDisp
   const [chatGptOutput, setChatGptOutput] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedIssuePayload, setCopiedIssuePayload] = useState(false);
+  const [isDispatchingWorkspace, setIsDispatchingWorkspace] = useState(false);
+  const [workspaceDispatchSuccess, setWorkspaceDispatchSuccess] = useState<string | null>(null);
 
   // Generate outbound prompt for ChatGPT
   const generatedChatGptPrompt = `You are the lead architect for Brain, an autonomous software company multi-agent system.
@@ -98,6 +101,26 @@ ${objective}
       objective: objective,
       branch: branch
     });
+  };
+
+  const handleDispatchWorkspace = async () => {
+    setIsDispatchingWorkspace(true);
+    setWorkspaceDispatchSuccess(null);
+    try {
+      const res: any = await workspaceApi.dispatchMission({
+        command: validation.detectedCommand,
+        target_repository: validation.detectedRepo,
+        target_branch: branch,
+        objective: objective,
+        conversation_id: 'conv_main',
+        preferred_mode: 'auto'
+      });
+      setWorkspaceDispatchSuccess(`Mission logged: ${res.mission_id} (${res.dispatch?.mode || 'queued'})`);
+    } catch (err: any) {
+      alert(`Workspace dispatch error: ${err.message}`);
+    } finally {
+      setIsDispatchingWorkspace(false);
+    }
   };
 
   const setPreset = (cmd: MissionCommand, repo: string, obj: string) => {
@@ -313,13 +336,26 @@ ${objective}
           </div>
 
           <div className="mt-5 pt-4 border-t border-slate-800 space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button
                 onClick={handleCopyIssuePayload}
                 className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs active:scale-95 transition-all"
               >
                 {copiedIssuePayload ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <FileCode className="w-3.5 h-3.5" />}
                 <span>{copiedIssuePayload ? 'Copied Issue Text' : 'Copy GitHub Issue Text'}</span>
+              </button>
+
+              <button
+                disabled={!validation.isValid || isDispatchingWorkspace}
+                onClick={handleDispatchWorkspace}
+                className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-mono text-xs active:scale-95 transition-all ${
+                  validation.isValid
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold'
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{isDispatchingWorkspace ? 'Dispatching...' : 'Dispatch to Brain Hub'}</span>
               </button>
 
               <button
@@ -335,8 +371,16 @@ ${objective}
                 <span>Run in Simulator</span>
               </button>
             </div>
+
+            {workspaceDispatchSuccess && (
+              <div className="p-2 rounded bg-emerald-950/60 border border-emerald-800 text-xs font-mono text-emerald-300 text-center flex items-center justify-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{workspaceDispatchSuccess}</span>
+              </div>
+            )}
+
             <p className="text-center text-[11px] text-slate-500">
-              Dispatches directly to the 6-stage pipeline simulator below to test sandboxing and checks.
+              Dispatches directly to the SQLite shared collaboration hub and queues execution for GitHub Actions.
             </p>
           </div>
         </div>

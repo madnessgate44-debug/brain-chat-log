@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Smartphone, Terminal, Copy, Check, Globe, Zap, KeyRound, Layers } from 'lucide-react';
+import { Shield, Smartphone, Terminal, Copy, Check, Globe, Zap, KeyRound, Layers, MessageSquare } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: string;
@@ -99,7 +99,7 @@ export const Header: React.FC<HeaderProps> = ({
             { id: 'simulator', label: 'Pipeline Simulator', icon: Shield },
             { id: 'fleet', label: 'Company Fleet', icon: Layers },
             { id: 'workflow', label: 'PR-B Studio', icon: Shield },
-            { id: 'chatlog', label: 'Chat Log & Sync', icon: Copy }
+            { id: 'chatlog', label: 'Shared Workspace & Log', icon: MessageSquare }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;

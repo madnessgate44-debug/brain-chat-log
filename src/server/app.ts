@@ -4,6 +4,7 @@ import { missionsRouter } from './routes/missions.js';
 import { artifactsRouter } from './routes/artifacts.js';
 import { syncRouter } from './routes/sync.js';
 import { participantsRouter } from './routes/participants.js';
+import { githubRouter } from './routes/github.js';
 import { openApiSpec } from './openapi.js';
 import { db } from './db.js';
 
@@ -64,6 +65,7 @@ export function createApiApp(): express.Express {
   app.use('/api/v1/artifacts', artifactsRouter);
   app.use('/api/v1/sync', syncRouter);
   app.use('/api/v1/participants', participantsRouter);
+  app.use('/api/v1/github', githubRouter);
 
   // Global Error Handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
